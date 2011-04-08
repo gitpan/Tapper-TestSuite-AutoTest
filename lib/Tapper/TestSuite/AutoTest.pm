@@ -15,18 +15,34 @@ use File::Spec::Functions 'tmpdir';
 
 extends 'Tapper::Base';
 
+our $VERSION = '3.000010';
+
+
 =head1 NAME
 
 Tapper::TestSuite::AutoTest - Tapper - Complete OS testing in a box via autotest
 
-=cut
-
-our $VERSION = '3.000001';
-
-
 =head1 SYNOPSIS
 
+You most likely want to run the frontend cmdline tool like this
+
+=over 4
+
+=item * Run an autotest subtest and report results to Tapper:
+
+  $ tapper-testsuite-autotest -t hackbench
+
+=item * Run multiple autotest subtests and report results to Tapper:
+
+  $ tapper-testsuite-autotest -t hackbench -t hwclock
+
+=back
+
+=head1 ABOUT
+
 This module wraps autotest to make its (sub) tests available for Tapper.
+
+The commandline tool simply calls the single steps like this:
 
     use Tapper::TestSuite::AutoTest;
 
@@ -35,8 +51,52 @@ This module wraps autotest to make its (sub) tests available for Tapper.
     $args       = $wrapper->install($args);
     $args       = $wrapper->run($args);
 
+The reporting evaluates several environment variables:
+
+  TAPPER_REPORT_SERVER
+  TAPPER_REPORT_API_PORT
+  TAPPER_REPORT_PORT
+  TAPPER_TESTRUN
+  TAPPER_REPORT_GROUP
+
+with some sensible defaults. They are automatically provided when
+using Tapper automation. 
+
+In case you run it manually the most important variable is
+C<TAPPER_REPORT_SERVER> pointing to your central Tapper server.
+
+See the Tapper manual for more details.
 
 =head1 FUNCTIONS
+
+=head2 copy_client
+
+Move the client to where it belongs.
+
+@param string - download directory
+@param string - target directory
+
+@return die() in case of error
+
+=cut
+
+sub copy_client
+{
+        my($self, $downloaddir, $target) = @_;
+        my ($error, $output);
+        `which rsync`;
+        if ( $? == 0)  {
+                ($error, $output) = $self->log_and_exec("rsync",
+                                                        "-a",
+                                                        "$downloaddir/*-autotest-*/client/",
+                                                        "$target/");
+        } else {
+                die "Target dir '$target' does not exist\n" if not -d $target;
+                ($error, $output) = $self->log_and_exec("cp","-r","$downloaddir/*-autotest-*/client/*","$target/");
+        }
+        die $output if $error;
+        return;
+}
 
 
 =head2 install
@@ -73,14 +133,11 @@ sub install
                                                                 "-xzf", $downloadfile,
                                                                 "-C", $downloaddir);
                         die $output if $error;
-                        ($error, $output) = $self->log_and_exec("rsync",
-                                                                "-a",
-                                                                "$downloaddir/*-autotest-*/client/",
-                                                                "$target/");
+                        $self->copy_client($downloaddir, $target);
                         die $output if $error;
                 }
          }
-
+        $args->{target} = $target;
         return $args;
 }
 
@@ -171,28 +228,27 @@ sub send_results
 
         my $report_group    = $args->{report_group};
 
-        my $report_meta = "
-          Version 13
-            1..1
-              # Tapper-Suite-Name: Autotest-$test
-              # Tapper-Machine-Name: $hostname
-              # Tapper-Suite-Version: $VERSION
-              ok 1 - Tapper metainfo
-                ";
+        my $report_meta = "Version 13
+1..1
+# Tapper-Suite-Name: Autotest-$test
+# Tapper-Machine-Name: $hostname
+# Tapper-Suite-Version: $VERSION
+ok 1 - Tapper metainfo
+";
         $report_meta .= $testrun_id   ? "# Tapper-Reportgroup-Testrun: $testrun_id\n"     : '';
-                $report_meta .= $report_group ? "# Tapper-Reportgroup-Arbitrary: $report_group\n" : '';
+        $report_meta .= $report_group ? "# Tapper-Reportgroup-Arbitrary: $report_group\n" : '';
 
-                my $meta = YAML::Syck::LoadFile("$result_dir/meta.yml");
-                push @{$meta->{file_order}}, 'tapper-suite-meta.tap';
-                $tar->read("$result_dir/tap.tar.gz");
-                $tar->replace_content( 'meta.yml', YAML::Syck::Dump($meta) );
-                $tar->add_data('tapper-suite-meta.tap',$report_meta);
-                $tar->write("$result_dir/tap.tar.gz", COMPRESS_GZIP);
+        my $meta = YAML::Syck::LoadFile("$result_dir/meta.yml");
+        push @{$meta->{file_order}}, 'tapper-suite-meta.tap';
+        $tar->read("$result_dir/tap.tar.gz");
+        $tar->replace_content( 'meta.yml', YAML::Syck::Dump($meta) );
+        $tar->add_data('tapper-suite-meta.tap',$report_meta);
+        $tar->write("$result_dir/tap.tar.gz", COMPRESS_GZIP);
 
-                my $report_id = $self->report_away($args);
-                $self->upload_stats($report_id, $args);
-                return $args;
-        }
+        my $report_id = $self->report_away($args);
+        $self->upload_stats($report_id, $args);
+        return $args;
+}
 
 
 =head2 print_help
@@ -232,7 +288,7 @@ sub parse_args
         GetOptions ("test|t=s"  => \@tests,
                     "directory|d=s" => \$dir,
                     "remote-name|O" => \$remote_name,
-                    "source_url|s"  => \$source,
+                    "source_url|s=s"  => \$source,
                     "help|h"        => \$help,
                    );
         $self->print_help() if $help;

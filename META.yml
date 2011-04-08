@@ -23,7 +23,7 @@ no_index:
     - t
     - xt
 requires:
-  Archive::Tar: 0
+  Archive::Tar: 1.76
   File::ShareDir: 0
   File::Slurp: 0
   File::Spec::Functions: 0
@@ -31,7 +31,7 @@ requires:
   IO::Socket::INET: 0
   Moose: 0
   Sys::Hostname: 0
-  Tapper::Base: 0
+  Tapper::Base: 3.000010
   YAML::Syck: 0
   perl: 5.10.0
-version: 3.000001
+version: 3.000010
