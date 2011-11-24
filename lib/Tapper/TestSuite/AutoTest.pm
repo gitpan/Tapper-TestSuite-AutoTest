@@ -12,10 +12,11 @@ use Archive::Tar;
 use IO::Socket::INET;
 use File::Slurp qw/slurp/;
 use File::Spec::Functions 'tmpdir';
+use Digest::MD5 'md5_hex';
 
 extends 'Tapper::Base';
 
-our $VERSION = '3.000010';
+our $VERSION = '3.000011';
 
 
 =head1 NAME
@@ -88,11 +89,11 @@ sub copy_client
         if ( $? == 0)  {
                 ($error, $output) = $self->log_and_exec("rsync",
                                                         "-a",
-                                                        "$downloaddir/*-autotest-*/client/",
+                                                        "$downloaddir/*autotest*/client/",
                                                         "$target/");
         } else {
                 die "Target dir '$target' does not exist\n" if not -d $target;
-                ($error, $output) = $self->log_and_exec("cp","-r","$downloaddir/*-autotest-*/client/*","$target/");
+                ($error, $output) = $self->log_and_exec("cp","-r","$downloaddir/*autotest*/client/*","$target/");
         }
         die $output if $error;
         return;
@@ -115,28 +116,39 @@ sub install
         my $error;
         my $output;
 
-        my $target = $args->{target} || tmpdir.'/tapper-testsuite-autotest-mirror/';
-        my $source = $args->{source};
+        my $tmp = tmpdir;
+        my $source   = $args->{source};
+        my $checksum = md5_hex($source);
+        my $target   = $args->{target} || "$tmp/tapper-testsuite-autotest-client-$checksum";
+        my $downloaddir = "$tmp/tapper-testsuite-autotest-mirror-$checksum";
 
-        my $downloaddir = "/tmp/";
         $self->makedir($target);
+        $self->makedir($downloaddir);
 
+        my $downloadfile;
         if (! -d "$target/tests") {
-                if ($source =~ m|github.com/.*tarball|) {
-                        my $downloadfile = "$downloaddir/autotest-from-github.tgz";
+                if ($source =~ m,^(http|ftp)://, ) {
+                        $downloadfile = "$downloaddir/autotest-download-$checksum.tgz";
                         if (! -e $downloadfile) {
+                                $self->log->debug( "Download autotest from $source to $downloadfile");
                                 ($error, $output) = $self->log_and_exec('wget', "--no-check-certificate",
                                                                         $source, "-O", $downloadfile);
                                 die $output if $error;
                         }
-                        ($error, $output) = $self->log_and_exec("tar",
-                                                                "-xzf", $downloadfile,
-                                                                "-C", $downloaddir);
-                        die $output if $error;
-                        $self->copy_client($downloaddir, $target);
-                        die $output if $error;
+                } elsif ($source =~ m,^file://,) {
+                        $downloadfile = $source;
+                        $downloadfile =~ s,^file://,,;
+                } else {
+                        $downloadfile = $source;
                 }
-         }
+                $self->log->debug( "Unpack autotest from file $downloadfile to subdir $downloaddir");
+                ($error, $output) = $self->log_and_exec("tar",
+                                                        "-xzf", $downloadfile,
+                                                        "-C", $downloaddir);
+                die $output if $error;
+                $self->copy_client($downloaddir, $target);
+                die $output if $error;
+        }
         $args->{target} = $target;
         return $args;
 }
@@ -162,7 +174,11 @@ sub report_away
         my $sock = IO::Socket::INET->new(PeerAddr => $args->{report_server},
                                          PeerPort => $args->{report_port},
                                          Proto    => 'tcp');
-        unless ($sock) { die "Can't open connection to ", $args->{report_server}, ":$!" }
+        $self->log->debug("Report to ".($args->{report_server} // "report_server=UNDEF").":".($args->{report_port} // "report_port=UNDEF"));
+        unless ($sock) {
+                $self->log->error( "Result TAP in $result_dir/tap.tar.gz can not be sent to Tapper server.");
+                die "Can't open connection to ", ($args->{report_server} // "report_server=UNDEF"), ":", ($args->{report_port} // "report_port=UNDEF"), ":$!"
+        }
 
         my $report_id = <$sock>;
         ($report_id) = $report_id =~ /(\d+)$/;
@@ -171,7 +187,7 @@ sub report_away
         return $report_id;
 }
 
-=head2 upload_stats
+=head2 upload_files
 
 Upload the stats file to reports framework.
 
@@ -180,27 +196,78 @@ Upload the stats file to reports framework.
 
 =cut
 
-sub upload_stats
+sub upload_files
 {
-        my ($self, $report_id, $args) = @_;
+        my ($self, $report_id, $test, $args) = @_;
 
-        my $host = $args->{reportserver};
-        my $port = $args->{reportport};
+        my $host       = $args->{reportserver};
+        my $port       = $args->{reportport};
+        my $result_dir = $args->{result_dir};
 
-        my $file    = $args->{result_dir}."/status";
-        my $cmdline = "#! upload $report_id status plain\n";
-        my $content = slurp($file);
+        # Currently no upload for these (personal taste, privacy, too big):
+        #
+        #   sysinfo/installed_packages
+        #
+        my @files = ();
+        push @files, (qw( status
+                          control
+                          sysinfo/cmdline
+                          sysinfo/cpuinfo
+                          sysinfo/df
+                          sysinfo/dmesg.gz
+                          sysinfo/gcc_--version
+                          sysinfo/hostname
+                          sysinfo/interrupts
+                          sysinfo/ld_--version
+                          sysinfo/lspci_-vvn
+                          sysinfo/meminfo
+                          sysinfo/modules
+                          sysinfo/mount
+                          sysinfo/partitions
+                          sysinfo/proc_mounts
+                          sysinfo/slabinfo
+                          sysinfo/uname
+                          sysinfo/uptime
+                          sysinfo/version
+                       ));
+        my @iterations = map { chomp; $_ } `cd  $result_dir ; find $test/sysinfo -name 'iteration.*'`;
+        foreach my $iteration (@iterations) {
+                push @files, map { "$iteration/$_" } (qw( interrupts.before
+                                                          interrupts.after
+                                                          meminfo.before
+                                                          meminfo.after
+                                                          schedstat.before
+                                                          schedstat.after
+                                                          slabinfo.before
+                                                          slabinfo.after
+                                                       ));
+        }
+        foreach my $shortfile (@files) {
+                my $file = "$result_dir/$shortfile";
+                next unless -e $file;
 
+                # upload uncompressed dmesg for easier inline reading
+                if ($file =~ m/dmesg.gz$/) {
+                        system("gunzip $file") or do {
+                                $file      =~ s/\.gz$//;
+                                $shortfile =~ s/\.gz$//;
+                        }
+                }
 
-        my $sock = IO::Socket::INET->new(PeerAddr => $args->{report_server},
-                                         PeerPort => $args->{report_api_port},
-                                         Proto    => 'tcp');
-        unless ($sock) { die "Can't open connection to ", $args->{report_server}, ":$!" }
-
-        $sock->print($cmdline);
-        $sock->print($content);
-        $sock->close();
-
+                my $cmdline    = "#! upload $report_id $shortfile plain\n";
+                my $content = slurp($file);
+                my $sock = IO::Socket::INET->new(PeerAddr => $args->{report_server},
+                                                 PeerPort => $args->{report_api_port},
+                                                 Proto    => 'tcp');
+                $self->log->debug("Upload '$shortfile' to ".($args->{report_server} // "report_server=UNDEF").":".($args->{report_api_port} // "report_api_port=UNDEF"));
+                unless ($sock) {
+                        $self->log->error( "Result file '$file' can not be sent to Tapper server.");
+                        die "Can't open connection to ", ($args->{report_server} // "report_server=UNDEF"), ":", ($args->{report_api_port} // "report_api_port=UNDEF"), ":$!"
+                }
+                $sock->print($cmdline);
+                $sock->print($content);
+                $sock->close();
+        }
         return;
 }
 
@@ -221,7 +288,7 @@ sub send_results
 
 
         my $tar             = Archive::Tar->new;
-        $args->{result_dir} = $args->{target}."/results/default/";
+        $args->{result_dir} = $args->{target}."/results/default";
         my $result_dir      = $args->{result_dir};
         my $hostname        = hostname();
         my $testrun_id      = $args->{testrun_id};
@@ -237,8 +304,16 @@ ok 1 - Tapper metainfo
 ";
         $report_meta .= $testrun_id   ? "# Tapper-Reportgroup-Testrun: $testrun_id\n"     : '';
         $report_meta .= $report_group ? "# Tapper-Reportgroup-Arbitrary: $report_group\n" : '';
+        $report_meta .= $self->autotest_meta($test, $args);
 
-        my $meta = YAML::Syck::LoadFile("$result_dir/meta.yml");
+        my $meta;
+        eval { $meta = YAML::Syck::LoadFile("$result_dir/meta.yml") };
+        if ($@) {
+                $meta = {};
+                $report_meta .= "# Error loading $result_dir/meta.yml: $@\n";
+                $report_meta .= "# Files in $result_dir\n";
+                $report_meta .= $_ foreach map { "#   ".$_ } `find $result_dir`;
+        }
         push @{$meta->{file_order}}, 'tapper-suite-meta.tap';
         $tar->read("$result_dir/tap.tar.gz");
         $tar->replace_content( 'meta.yml', YAML::Syck::Dump($meta) );
@@ -246,10 +321,48 @@ ok 1 - Tapper metainfo
         $tar->write("$result_dir/tap.tar.gz", COMPRESS_GZIP);
 
         my $report_id = $self->report_away($args);
-        $self->upload_stats($report_id, $args);
+        $self->upload_files($report_id, $test, $args) if $args->{uploadfiles};
         return $args;
 }
 
+=head2 autotest_meta
+
+Add meta information from files generated by autotest.
+
+@param hash ref - args
+
+@return string - Tapper TAP metainfo headers
+
+=cut
+
+sub autotest_meta
+{
+        my ($self, $test, $args) = @_;
+
+        my $result_dir      = $args->{result_dir};
+        my $meta = '';
+
+        # --- generic entries ---
+        my %metamapping = ( "uname"        => "uname",
+                            "flags"        => "cmdline",
+                            "machine-name" => "hostname",
+                          );
+        foreach my $header (keys %metamapping) {
+                my $file = "$result_dir/sysinfo/".$metamapping{$header};
+                my ($value) = slurp($file);
+                chomp $value;
+                $meta .= "# Tapper-$header: $value\n";
+        }
+
+        # --- cpu info ---
+        my @lines      = slurp("$result_dir/sysinfo/cpuinfo");
+        my $is_arm_cpu = grep { /Processor.*:.*ARM/ } @lines;
+        my $entry      = $is_arm_cpu ? "Processor" : "model name";
+        my @cpuinfo    = map { chomp ; s/^$entry.*: *//; $_ } grep { /$entry.*:/ } @lines;
+        $meta         .= "# Tapper-cpuinfo: ".@cpuinfo." cores [".$cpuinfo[0]."]\n" if @cpuinfo;
+
+        return $meta;
+}
 
 =head2 print_help
 
@@ -283,13 +396,15 @@ sub parse_args
 {
         my ($self) = @_;
         my @tests;
-        my ($dir, $remote_name, $help, $source);
+        my ($dir, $remote_name, $help, $source, $uploadfiles);
 
+        $uploadfiles = 1;
         GetOptions ("test|t=s"  => \@tests,
                     "directory|d=s" => \$dir,
                     "remote-name|O" => \$remote_name,
                     "source_url|s=s"  => \$source,
                     "help|h"        => \$help,
+                    "uploadfiles!" => \$uploadfiles,
                    );
         $self->print_help() if $help;
         if (not @tests) {
@@ -300,12 +415,13 @@ sub parse_args
         my $args = {subtests        => \@tests,
                     target          => $dir,
                     source          => $source || 'http://github.com/renormalist/autotest/tarball/master',
-                    report_server   => $ENV{TAPPER_REPORT_SERVER}   || 'tapper',
-                    report_api_port => $ENV{TAPPER_REPORT_API_PORT} || 7358,
-                    report_port     => $ENV{TAPPER_REPORT_PORT}     || 7357,
+                    report_server   => $ENV{TAPPER_REPORT_SERVER},
+                    report_api_port => $ENV{TAPPER_REPORT_API_PORT} || '7358',
+                    report_port     => $ENV{TAPPER_REPORT_PORT}     || '7357',
                     testrun_id      => $ENV{TAPPER_TESTRUN}         || '',
                     report_group    => $ENV{TAPPER_REPORT_GROUP}    || '',
                     remote_name     => $remote_name,
+                    uploadfiles     => $uploadfiles,
                    };
 
         return $args;

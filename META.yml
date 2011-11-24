@@ -24,6 +24,7 @@ no_index:
     - xt
 requires:
   Archive::Tar: 1.76
+  Digest::MD5: 0
   File::ShareDir: 0
   File::Slurp: 0
   File::Spec::Functions: 0
@@ -34,4 +35,4 @@ requires:
   Tapper::Base: 3.000010
   YAML::Syck: 0
   perl: 5.10.0
-version: 3.000010
+version: 3.000011
