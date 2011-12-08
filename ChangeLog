@@ -1,4 +1,10 @@
-2011-11-24  Steffen Schwigon  <ss5@renormalist.net>
+2011-12-08  Steffen Schwigon  <steffen.schwigon@amd.com>
+
+	* v3.0.12
+
+	* [FIX] fails on nonexisting metainfo files
+
+2011-11-24  Steffen Schwigon  <steffen.schwigon@amd.com>
 
 	* v3.0.11
 

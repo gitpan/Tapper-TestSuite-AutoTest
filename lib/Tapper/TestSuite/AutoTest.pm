@@ -16,7 +16,7 @@ use Digest::MD5 'md5_hex';
 
 extends 'Tapper::Base';
 
-our $VERSION = '3.000011';
+our $VERSION = '3.000012';
 
 
 =head1 NAME
@@ -349,6 +349,7 @@ sub autotest_meta
                           );
         foreach my $header (keys %metamapping) {
                 my $file = "$result_dir/sysinfo/".$metamapping{$header};
+                next unless -e $file;
                 my ($value) = slurp($file);
                 chomp $value;
                 $meta .= "# Tapper-$header: $value\n";

@@ -35,4 +35,4 @@ requires:
   Tapper::Base: 3.000010
   YAML::Syck: 0
   perl: 5.10.0
-version: 3.000011
+version: 3.000012
