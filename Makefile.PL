@@ -1,31 +1,67 @@
-use inc::Module::Install;
 
-name     'Tapper-TestSuite-AutoTest';
-all_from 'lib/Tapper/TestSuite/AutoTest.pm';
-author   'AMD OSRC Tapper Team <tapper@amd64.org>';
-license  'freebsd';
+use strict;
+use warnings;
 
+use 5.010;
 
-build_requires 'Test::More';
-build_requires 'File::Temp';
-build_requires 'Test::Deep';
-
-requires 'Moose';
-requires 'Getopt::Long';
-requires 'File::ShareDir';
-requires 'File::Spec::Functions';
-requires 'Tapper::Base' => "3.000010";
-requires 'Sys::Hostname';
-requires 'YAML::Syck';
-requires 'Archive::Tar' => "1.76";
-requires 'IO::Socket::INET';
-requires 'File::Slurp';
-requires 'Digest::MD5';
-
-auto_install;
-
-install_script glob('bin/*');
+use ExtUtils::MakeMaker 6.30;
 
 
-WriteAll;
+
+my %WriteMakefileArgs = (
+  "ABSTRACT" => "Tapper - Complete OS testing in a box via autotest",
+  "AUTHOR" => "AMD OSRC Tapper Team <tapper\@amd64.org>",
+  "BUILD_REQUIRES" => {
+    "Test::More" => 0
+  },
+  "CONFIGURE_REQUIRES" => {
+    "ExtUtils::MakeMaker" => "6.30"
+  },
+  "DISTNAME" => "Tapper-TestSuite-AutoTest",
+  "EXE_FILES" => [
+    "bin/tapper-testsuite-autotest"
+  ],
+  "LICENSE" => "open_source",
+  "NAME" => "Tapper::TestSuite::AutoTest",
+  "PREREQ_PM" => {
+    "Archive::Tar" => 0,
+    "Digest::MD5" => 0,
+    "File::Slurp" => 0,
+    "File::Spec::Functions" => 0,
+    "Getopt::Long" => 0,
+    "IO::Socket::INET" => 0,
+    "Log::Log4perl" => 0,
+    "Moose" => 0,
+    "Sys::Hostname" => 0,
+    "Tapper::Base" => 0,
+    "YAML::Syck" => 0,
+    "strict" => 0,
+    "warnings" => 0
+  },
+  "VERSION" => "4.0.1",
+  "test" => {
+    "TESTS" => "t/*.t"
+  }
+);
+
+
+unless ( eval { ExtUtils::MakeMaker->VERSION(6.56) } ) {
+  my $br = delete $WriteMakefileArgs{BUILD_REQUIRES};
+  my $pp = $WriteMakefileArgs{PREREQ_PM};
+  for my $mod ( keys %$br ) {
+    if ( exists $pp->{$mod} ) {
+      $pp->{$mod} = $br->{$mod} if $br->{$mod} > $pp->{$mod};
+    }
+    else {
+      $pp->{$mod} = $br->{$mod};
+    }
+  }
+}
+
+delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
+  unless eval { ExtUtils::MakeMaker->VERSION(6.52) };
+
+WriteMakefile(%WriteMakefileArgs);
+
+
 

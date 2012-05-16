@@ -1,4 +1,6 @@
-#! perl
+#! /usr/bin/perl
+# PODNAME: tapper-testsuite-autotest
+# ABSTRACT: cmdline frontend to Tapper::TestSuite::AutoTest
 
 use Log::Log4perl;
 
@@ -15,9 +17,15 @@ my $args = $wrapper->parse_args();
 $args = $wrapper->install($args);
 $args = $wrapper->run($args);
 
+
+__END__
+=pod
+
+=encoding utf-8
+
 =head1 NAME
 
-tapper-testsuite-autotest - Frontend tool for running autotest in a Tapper infrastructure
+tapper-testsuite-autotest - cmdline frontend to Tapper::TestSuite::AutoTest
 
 =head1 SYNOPSIS
 
@@ -34,12 +42,15 @@ L<Tapper::TestSuite::AutoTest|Tapper::TestSuite::AutoTest>.
 
 =head1 AUTHOR
 
-AMD OSRC Tapper Team, C<< <tapper at amd64.org> >>
+AMD OSRC Tapper Team <tapper@amd64.org>
 
-=head1 COPYRIGHT & LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright 2008-2011 AMD OSRC Tapper Team, all rights reserved.
+This software is Copyright (c) 2012 by Advanced Micro Devices, Inc..
 
-This program is released under the following license: freebsd
+This is free software, licensed under:
+
+  The (two-clause) FreeBSD License
 
 =cut
+
