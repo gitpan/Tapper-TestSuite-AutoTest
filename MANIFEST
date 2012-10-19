@@ -1,11 +1,12 @@
 Changes
 LICENSE
 MANIFEST
+MANIFEST.SKIP
 META.json
 META.yml
 Makefile.PL
 README
-bin/tapper-testsuite-autotest
+build-exe.sh
 dist.ini
 lib/Tapper/TestSuite/AutoTest.pm
 t/00-load.t

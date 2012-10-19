@@ -18,27 +18,25 @@ my %WriteMakefileArgs = (
     "ExtUtils::MakeMaker" => "6.30"
   },
   "DISTNAME" => "Tapper-TestSuite-AutoTest",
-  "EXE_FILES" => [
-    "bin/tapper-testsuite-autotest"
-  ],
+  "EXE_FILES" => [],
   "LICENSE" => "open_source",
   "NAME" => "Tapper::TestSuite::AutoTest",
   "PREREQ_PM" => {
     "Archive::Tar" => 0,
+    "Cwd" => 0,
     "Digest::MD5" => 0,
     "File::Slurp" => 0,
     "File::Spec::Functions" => 0,
     "Getopt::Long" => 0,
     "IO::Socket::INET" => 0,
-    "Log::Log4perl" => 0,
     "Moose" => 0,
+    "MooseX::Log::Log4perl" => 0,
     "Sys::Hostname" => 0,
-    "Tapper::Base" => 0,
     "YAML::Syck" => 0,
     "strict" => 0,
     "warnings" => 0
   },
-  "VERSION" => "4.0.1",
+  "VERSION" => "4.1.0",
   "test" => {
     "TESTS" => "t/*.t"
   }

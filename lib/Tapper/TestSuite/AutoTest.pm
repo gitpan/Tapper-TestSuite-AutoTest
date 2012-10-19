@@ -1,9 +1,11 @@
 package Tapper::TestSuite::AutoTest;
+# git description: v4.0.1-9-g97538db
+
 BEGIN {
   $Tapper::TestSuite::AutoTest::AUTHORITY = 'cpan:AMD';
 }
 {
-  $Tapper::TestSuite::AutoTest::VERSION = '4.0.1';
+  $Tapper::TestSuite::AutoTest::VERSION = '4.1.0';
 }
 # ABSTRACT: Tapper - Complete OS testing in a box via autotest
 
@@ -11,6 +13,7 @@ use warnings;
 use strict;
 use 5.010;
 
+use Cwd;
 use Moose;
 use Getopt::Long qw/GetOptions/;
 use Sys::Hostname qw/hostname/;
@@ -21,7 +24,33 @@ use File::Slurp qw/slurp/;
 use File::Spec::Functions 'tmpdir';
 use Digest::MD5 'md5_hex';
 
-extends 'Tapper::Base';
+with 'MooseX::Log::Log4perl';
+
+
+sub makedir
+{
+        my ($self, $dir) = @_;
+        return 0 if -d $dir;
+        if (-e $dir and not -d $dir) {
+                unlink $dir;
+        }
+        system("mkdir","-p",$dir) == 0 or return "Can't create $dir:$!";
+        return 0;
+}
+
+
+sub log_and_system {
+        my ($self, @args) = @_;
+        $self->log->debug(join(" ", @args));
+        system(@args);
+}
+
+
+sub log_and_system_shell {
+        my ($self, @args) = @_;
+        $self->log->debug(join(" ", @args));
+        system(join(" ", @args));
+}
 
 
 sub copy_client
@@ -30,13 +59,13 @@ sub copy_client
         my ($error, $output);
         `which rsync`;
         if ( $? == 0)  {
-                ($error, $output) = $self->log_and_exec("rsync",
-                                                        "-a",
-                                                        "$downloaddir/*autotest*/client/",
-                                                        "$target/");
+                ($error, $output) = $self->log_and_system_shell("rsync",
+                                                                "-a",
+                                                                "$downloaddir/*autotest*/",
+                                                                "$target/");
         } else {
                 die "Target dir '$target' does not exist\n" if not -d $target;
-                ($error, $output) = $self->log_and_exec("cp","-r","$downloaddir/*autotest*/client/*","$target/");
+                ($error, $output) = $self->log_and_system_shell("cp","-r","$downloaddir/*autotest*/*","$target/");
         }
         die $output if $error;
         return;
@@ -52,9 +81,10 @@ sub install
 
         my $tmp = tmpdir;
         my $source   = $args->{source};
-        my $checksum = md5_hex($source);
-        my $target   = $args->{target} || "$tmp/tapper-testsuite-autotest-client-$checksum";
-        my $downloaddir = "$tmp/tapper-testsuite-autotest-mirror-$checksum";
+        my $user     = $ENV{USER} || 'unknown';
+        my $checksum = substr(md5_hex($source), 0,7);
+        my $target   = $args->{target} || "$tmp/tapper-testsuite-autotest-client-$user-$checksum";
+        my $downloaddir = "$tmp/tapper-testsuite-autotest-mirror-$user-$checksum";
 
         $self->makedir($target);
         $self->makedir($downloaddir);
@@ -65,8 +95,8 @@ sub install
                         $downloadfile = "$downloaddir/autotest-download-$checksum.tgz";
                         if (! -e $downloadfile) {
                                 $self->log->debug( "Download autotest from $source to $downloadfile");
-                                ($error, $output) = $self->log_and_exec('wget', "--no-check-certificate",
-                                                                        $source, "-O", $downloadfile);
+                                ($error, $output) = $self->log_and_system('wget', "--no-check-certificate",
+                                                                          $source, "-O", $downloadfile);
                                 die $output if $error;
                         }
                 } elsif ($source =~ m,^file://,) {
@@ -76,9 +106,9 @@ sub install
                         $downloadfile = $source;
                 }
                 $self->log->debug( "Unpack autotest from file $downloadfile to subdir $downloaddir");
-                ($error, $output) = $self->log_and_exec("tar",
-                                                        "-xzf", $downloadfile,
-                                                        "-C", $downloaddir);
+                ($error, $output) = $self->log_and_system("tar",
+                                                          "-xzf", $downloadfile,
+                                                          "-C", $downloaddir);
                 die $output if $error;
                 $self->copy_client($downloaddir, $target);
                 die $output if $error;
@@ -225,7 +255,7 @@ sub send_results
         my $report;
 
         my $tar             = Archive::Tar->new;
-        $args->{result_dir} = $args->{target}."/results/default";
+        $args->{result_dir} = $args->{target}."/client/results/default";
         my $result_dir      = $args->{result_dir};
         my $hostname        = get_machine_name;
         my $testrun_id      = $args->{testrun_id};
@@ -326,13 +356,13 @@ sub parse_args
                    );
         $self->print_help() if $help;
         if (not @tests) {
-                print "No subtest requested provided. Please name at least one subtest you want to run\n\n.";
+                print "Please name at least one subtest you want to run (--test=...).\n\n.";
                 $self->print_help();
         }
 
         my $args = {subtests        => \@tests,
                     target          => $dir,
-                    source          => $source || 'http://github.com/renormalist/autotest/tarball/master',
+                    source          => $source || 'http://github.com/autotest/autotest/tarball/0.14.3',
                     report_server   => $ENV{TAPPER_REPORT_SERVER},
                     report_api_port => $ENV{TAPPER_REPORT_API_PORT} || '7358',
                     report_port     => $ENV{TAPPER_REPORT_PORT}     || '7357',
@@ -352,13 +382,16 @@ sub run
 {
         my ($self, $args) = @_;
         my $target = $args->{target};
-        my $autotest = "$target/bin/autotest";
+        my $autotest = "./autotest-local";
 
+        my $olddir = cwd();
         foreach my $test (@{$args->{subtests} || [] }) {
-                my $test_path = "$target/tests/$test/control";
-                $self->log_and_exec($autotest, "--tap", $test_path);
+                $self->log->debug("chdir $target/client");
+                chdir "$target/client";
+                $self->log_and_system($autotest, "run", "--tap", $test);
                 $self->send_results($test, $args);
         }
+        chdir $olddir;
         return $args;
 }
 
@@ -419,6 +452,23 @@ C<TAPPER_REPORT_SERVER> pointing to your central Tapper server.
 See the Tapper manual for more details.
 
 =head1 FUNCTIONS
+
+=head2 makedir
+
+Checks whether a given directory exists and creates it if not.
+
+@param string - directory to create
+
+@return success - 0
+@return error   - error string
+
+=head2 $self->log_and_system(@args)
+
+Log and do a multi arg C<system()>.
+
+=head2 $self->log_and_system_shell(@args)
+
+Log and do a single arg C<system()>.
 
 =head2 copy_client
 
