@@ -1,11 +1,11 @@
 package Tapper::TestSuite::AutoTest;
-# git description: v4.0.1-9-g97538db
+# git description: v4.1.0-2-gb1b09ce
 
 BEGIN {
-  $Tapper::TestSuite::AutoTest::AUTHORITY = 'cpan:AMD';
+  $Tapper::TestSuite::AutoTest::AUTHORITY = 'cpan:TAPPER';
 }
 {
-  $Tapper::TestSuite::AutoTest::VERSION = '4.1.0';
+  $Tapper::TestSuite::AutoTest::VERSION = '4.1.1';
 }
 # ABSTRACT: Tapper - Complete OS testing in a box via autotest
 
@@ -422,7 +422,7 @@ You most likely want to run the frontend cmdline tool like this
 
 =back
 
-=head1 ABOUT
+=head1 DESCRIPTION
 
 This module wraps autotest to make its (sub) tests available for Tapper.
 
