@@ -1,5 +1,8 @@
 Revision history for Tapper-TestSuite-AutoTest
 
+4.1.2     2012-11-20
+        - fix forgotten frontend 'tapper-testsuite-autotest'
+
 4.1.1     2012-11-20
         - dzil pluginbundle TAPPER
 

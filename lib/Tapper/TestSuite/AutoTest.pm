@@ -1,11 +1,11 @@
 package Tapper::TestSuite::AutoTest;
-# git description: v4.1.0-2-gb1b09ce
+# git description: v4.1.1-1-gdd3439b
 
 BEGIN {
   $Tapper::TestSuite::AutoTest::AUTHORITY = 'cpan:TAPPER';
 }
 {
-  $Tapper::TestSuite::AutoTest::VERSION = '4.1.1';
+  $Tapper::TestSuite::AutoTest::VERSION = '4.1.2';
 }
 # ABSTRACT: Tapper - Complete OS testing in a box via autotest
 

@@ -6,6 +6,7 @@ META.json
 META.yml
 Makefile.PL
 README
+bin/tapper-testsuite-autotest
 build-exe.sh
 dist.ini
 lib/Tapper/TestSuite/AutoTest.pm
